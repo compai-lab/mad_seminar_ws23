@@ -9,20 +9,24 @@ from torch import Tensor
 class AutoencoderModel(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
+        # Image size is 64 x 64, latent dim should be 4 x 4 x 128
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(1, 32, 3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=7)
+            nn.Conv2d(64, 128, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, 3, stride=2, padding=1),
         )
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(64, 32, kernel_size=7),
+            nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(16, 1, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.Sigmoid()
+            nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 1, 3, stride=2, padding=1, output_padding=1),
         )
 
         self.config = config
@@ -43,7 +47,7 @@ class AutoencoderModel(pl.LightningModule):
         }
 
     def training_step(self, batch: Tensor, batch_idx):
-        x, _ = batch
+        x = batch
         recon = self(x)
         loss = nn.MSELoss()(recon, x)
         self.log('train_loss', loss)

@@ -1,3 +1,4 @@
-data/*.png
+/data/**/*.png
+/data/**/*.csv
 **__pycache__
 lightning_logs/
