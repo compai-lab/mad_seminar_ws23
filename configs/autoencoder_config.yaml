@@ -1,0 +1,5 @@
+seed: 42
+
+lr: 0.001
+num_epochs: 10
+batch_size: 32
