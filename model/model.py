@@ -12,23 +12,30 @@ class AutoencoderModel(pl.LightningModule):
         # Image size is 64 x 64, latent dim should be 4 x 4 x 128
         self.encoder = nn.Sequential(
             nn.Conv2d(1, 32, 3, stride=2, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 64, 3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.Conv2d(128, 256, 3, stride=2, padding=1),
         )
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.ConvTranspose2d(32, 1, 3, stride=2, padding=1, output_padding=1),
         )
 
+        self.loss_fn = nn.MSELoss()
         self.config = config
 
     def forward(self, x: Tensor):
@@ -49,8 +56,15 @@ class AutoencoderModel(pl.LightningModule):
     def training_step(self, batch: Tensor, batch_idx):
         x = batch
         recon = self(x)
-        loss = nn.MSELoss()(recon, x)
-        self.log('train_loss', loss)
+        loss = self.loss_fn(recon, x)
+        self.log('train_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
+        return loss
+
+    def validation_step(self, batch: Tensor, batch_idx):
+        x = batch
+        recon = self(x)
+        loss = self.loss_fn(recon, x)
+        self.log('val_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
         return loss
 
     def configure_optimizers(self):

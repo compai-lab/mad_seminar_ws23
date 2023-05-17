@@ -72,6 +72,8 @@ class TrainDataModule(pl.LightningDataModule):
         split_idx = int(len(data) * train_val_split)
         self.train_data = data[:split_idx]
         self.val_data = data[split_idx:]
+        print(f"Using {len(self.train_data)} images for training and "
+              f"{len(self.val_data)} images for validation")
 
     def train_dataloader(self):
         return DataLoader(TrainDataset(self.train_data, self.target_size),

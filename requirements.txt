@@ -3,3 +3,5 @@ pandas
 torch
 torchvision
 pytorch-lightning
+tensorboard
+torch_tb_profiler
