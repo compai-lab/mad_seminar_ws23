@@ -1,13 +1,14 @@
 import logging
+from os import XATTR_SIZE_MAX
 #
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
-import wandb
 import plotly.graph_objects as go
-
+import cv2
+import numpy as np
 #
 from torch.nn import L1Loss
 #
@@ -17,7 +18,6 @@ from skimage import exposure
 #
 import lpips
 import copy
-from transforms.synthetic import *
 
 
 class Evaluator:
@@ -26,14 +26,16 @@ class Evaluator:
         - run tasks training_end, e.g. anomaly detection, reconstruction fidelity, disease classification, etc..
     """
     def __init__(self, model, device, test_data_dict):
-        super(Evaluator, self).__init__(model, device, test_data_dict)
+        # super(Evaluator, self).__init__(model, device, test_data_dict)
+        super(Evaluator, self).__init__()
 
         self.model = model
+        self.device = model.device
         self.test_data_dict = test_data_dict
         self.criterion_rec = L1Loss().to(device)
         self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(device)
 
-    def object_localization(self):
+    def evaluate(self):
         """
         Validation of downstream tasks
         Logs results to wandb
@@ -67,23 +69,23 @@ class Evaluator:
                 'Recall': [],
                 'F1': [],
             }
-            logging.info('DATASET: {}'.format(dataset_key))
+            print('*********************** DATASET: {} ********************'.format(dataset_key))
             tps, fns, fps = 0, 0, []
             for idx, data in enumerate(dataset):
-                x, masks, neg_masks = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device)
-                nr_batches, nr_slices, width, height = x.shape
+                inputs, masks, neg_masks = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device)
+                nr_batches, nr_slices, width, height = inputs.shape
                 neg_masks[neg_masks>0.5] = 1
                 neg_masks[neg_masks<1] = 0
-                results = self.model.detect_anomaly(x)
+                results = self.model.detect_anomaly(inputs)
                 reconstructions = results['reconstruction']
                 anomaly_maps = results['anomaly_map']
                 anomaly_scores = results['anomaly_score']
 
-                for i in range(len(x)):
-                    count = str(idx * len(x) + i)
-                    x_i = x[i][0]
+                for i in range(nr_batches):
+                    count = str(idx * nr_batches + i)
+                    x_i = inputs[i][0]
                     x_rec_i = reconstructions[i][0] if reconstructions is not None else None
-                    ano_map_i = anomaly_maps[i][0]
+                    ano_map_i = anomaly_maps[i][0].detach().numpy()
                     mask_i = masks[i][0].cpu().detach().numpy()
                     neg_mask_i = neg_masks[i][0].cpu().detach().numpy()
                     bboxes = cv2.cvtColor(neg_mask_i *255, cv2.COLOR_GRAY2RGB)
@@ -102,12 +104,11 @@ class Evaluator:
                         loss_lpips = np.squeeze(lpips_alex(x_i.cpu(), x_rec_i.cpu()).detach().numpy())
                         test_metrics['LPIPS'].append(loss_lpips)
                         #
-                        x_ = x_i.cpu().detach().numpy()
-                        x_rec_ = x_rec_i.cpu().detach().numpy()
+                        x_rec_i = x_rec_i.cpu().detach().numpy()
 
-                        ssim_ = ssim(x_rec_, x_, data_range=1.)
+                        ssim_ = ssim(x_rec_i, x_i.cpu().detach().numpy(), data_range=1.)
                         test_metrics['SSIM'].append(ssim_)
-
+                    x_i = x_i.cpu().detach().numpy()
                     # print(np.sum(mask_))
                     x_pos = ano_map_i * mask_i
                     x_neg = ano_map_i * neg_mask_i
@@ -154,16 +155,16 @@ class Evaluator:
                             axarr[idx_arr].set_title(titles[idx_arr])
 
             for metric in test_metrics:
-                logging.info('{} mean: {} +/- {}'.format(metric, np.nanmean(test_metrics[metric]),
+                print('{} mean: {} +/- {}'.format(metric, np.nanmean(test_metrics[metric]),
                                                          np.nanstd(test_metrics[metric])))
                 if metric == 'TP':
-                    logging.info(f'TP: {np.sum(test_metrics[metric])} of {len(test_metrics[metric])} detected')
+                    print(f'TP: {np.sum(test_metrics[metric])} of {len(test_metrics[metric])} detected')
                 if metric == 'FP':
-                    logging.info(f'FP: {np.sum(test_metrics[metric])} missed')
+                    print(f'FP: {np.sum(test_metrics[metric])} missed')
                 metrics[metric].append(test_metrics[metric])
 
-        logging.info('Writing plots...')
-
+        print('Writing plots...')
+        fig_bps = dict()
         for metric in metrics:
             fig_bp = go.Figure()
             x = []
@@ -187,5 +188,5 @@ class Evaluator:
                 yaxis=dict(range=[0, 1]),
             )
             fig_bp.update_yaxes(range=[0, 1], title_text='score', tick0=0, dtick=0.1, showgrid=False)
-
-        return metrics, fig_bp, diffp
+            fig_bps[metric] = fig_bp
+        return metrics, fig_bps, diffp
