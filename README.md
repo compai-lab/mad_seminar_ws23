@@ -30,7 +30,6 @@ python -m pip install -r requirements.txt
 
 Download and extract the data
 ```shell
-cd data
 wget <link you got from your supervisor>
 unzip data.zip
 ```
