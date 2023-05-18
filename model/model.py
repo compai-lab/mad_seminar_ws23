@@ -21,8 +21,14 @@ class AutoencoderModel(pl.LightningModule):
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.Conv2d(128, 256, 3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, stride=2, padding=1),
         )
         self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(256, 256, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
             nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),

@@ -1,9 +1,8 @@
 seed: 42
 
-train_data_dir: ./data/IXI
 split_dir: ./data/splits
 
-target_size: !<tag:yaml.org,2002:seq> [64,64]
+target_size: !<tag:yaml.org,2002:seq> [128,128]
 batch_size: 32
 
 lr: 0.001

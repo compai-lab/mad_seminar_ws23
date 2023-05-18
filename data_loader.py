@@ -1,6 +1,4 @@
 import os
-import random
-from glob import glob
 from typing import List, Tuple
 
 import pandas as pd
@@ -12,13 +10,13 @@ from torchvision import transforms
 
 class TrainDataset(Dataset):
 
-    def __init__(self, data: List[str], target_size=(64, 64)):
+    def __init__(self, data: List[str], target_size=(128, 128)):
         """
-        Loads normal IXI images from data_dir
+        Loads images from data
 
         @param data:
             paths to images
-        @param: target_size: tuple (int, int), default: (64, 64)
+        @param: target_size: tuple (int, int), default: (128, 128)
             the desired output size
         """
         super(TrainDataset, self).__init__()
@@ -42,13 +40,13 @@ class TrainDataset(Dataset):
 
 
 class TrainDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, target_size=(64, 64), batch_size: int = 32, train_val_split: float = 0.8):
+    def __init__(self, split_dir: str, target_size=(128, 128), batch_size: int = 32):
         """
         Data module for training
 
-        @param data_dir: str
-            path to directory containing data
-        @param: target_size: tuple (int, int), default: (64, 64)
+        @param split_dir: str
+            path to directory containing the split files
+        @param: target_size: tuple (int, int), default: (128, 128)
             the desired output size
         @param: batch_size: int, default: 32
             batch size
@@ -57,23 +55,23 @@ class TrainDataModule(pl.LightningDataModule):
         self.target_size = target_size
         self.batch_size = batch_size
 
-        # Load files from data_dir
-        data = glob(data_dir + '/*.png')
-        assert len(data) > 0, f'No files found in {data_dir}'
-        print(f'Found {len(data)} files in {data_dir}')
+        train_csv_ixi = os.path.join(split_dir, 'ixi_normal_train.csv')
+        train_csv_fastMRI = os.path.join(split_dir, 'normal_train.csv')
+        val_csv = os.path.join(split_dir, 'normal_val.csv')
 
-        # Shuffle data
-        original_seed = random.getstate()
-        random.seed(42)
-        random.shuffle(data)
-        random.setstate(original_seed)
+        # Load csv files
+        train_files_ixi = pd.read_csv(train_csv_ixi)['filename'].tolist()
+        train_files_fastMRI = pd.read_csv(train_csv_fastMRI)['filename'].tolist()
+        val_files = pd.read_csv(val_csv)['filename'].tolist()
 
-        # Split data
-        split_idx = int(len(data) * train_val_split)
-        self.train_data = data[:split_idx]
-        self.val_data = data[split_idx:]
-        print(f"Using {len(self.train_data)} images for training and "
-              f"{len(self.val_data)} images for validation")
+        # Combine files
+        self.train_data = train_files_ixi + train_files_fastMRI
+        self.val_data = val_files
+
+        # Logging
+        print(f"Using {len(train_files_ixi)} IXI images "
+              f"and {len(train_files_fastMRI)} fastMRI images for training. "
+              f"Using {len(val_files)} images for validation.")
 
     def train_dataloader(self):
         return DataLoader(TrainDataset(self.train_data, self.target_size),
@@ -88,7 +86,7 @@ class TrainDataModule(pl.LightningDataModule):
 
 class TestDataset(Dataset):
 
-    def __init__(self, img_csv: str, pos_mask_csv: str, neg_mask_csv: str, target_size=(64, 64)):
+    def __init__(self, img_csv: str, pos_mask_csv: str, neg_mask_csv: str, target_size=(128, 128)):
         """
         Loads anomalous images, their positive masks and negative masks from data_dir
 
@@ -98,7 +96,7 @@ class TestDataset(Dataset):
             path to csv file containing filenames to the positive masks
         @param img_csv: str
             path to csv file containing filenames to the negative masks
-        @param: target_size: tuple (int, int), default: (64, 64)
+        @param: target_size: tuple (int, int), default: (128, 128)
             the desired output size
         """
         super(TestDataset, self).__init__()

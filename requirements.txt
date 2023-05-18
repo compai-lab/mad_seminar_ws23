@@ -8,3 +8,6 @@ torch_tb_profiler
 ipykernel
 lpips 
 opencv-python
+plotly
+scikit-image
+nbformat
