@@ -1,23 +1,17 @@
-import logging
-from os import XATTR_SIZE_MAX
-#
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-logging.getLogger("matplotlib").setLevel(logging.WARNING)
-
-import plotly.graph_objects as go
 import cv2
-import numpy as np
-#
-from torch.nn import L1Loss
-#
-from skimage.metrics import structural_similarity as ssim
-
-from skimage import exposure
-#
+import logging
 import lpips
-import copy
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objects as go
+
+from skimage.metrics import structural_similarity as ssim
+from torch.nn import L1Loss
+
+
+matplotlib.use("Agg")
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
 class Evaluator:
@@ -33,7 +27,9 @@ class Evaluator:
         self.device = model.device
         self.test_data_dict = test_data_dict
         self.criterion_rec = L1Loss().to(device)
-        self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(device)
+        self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze',
+                                     use_dropout=True, eval_mode=True,
+                                     spatial=True, lpips=True).to(device)
 
     def evaluate(self):
         """
@@ -43,7 +39,7 @@ class Evaluator:
         :param global_model:
             Global parameters
         """
-        logging.info("################ Object Localzation TEST #################")
+        logging.info("############### Object Localzation TEST ################")
         lpips_alex = lpips.LPIPS(net='alex')  # best forward scores
         # self.model.load_state_dict(global_model)
         self.model.eval()
@@ -69,17 +65,16 @@ class Evaluator:
                 'Recall': [],
                 'F1': [],
             }
-            print('*********************** DATASET: {} ********************'.format(dataset_key))
+            print('******************* DATASET: {} ****************'.format(dataset_key))
             tps, fns, fps = 0, 0, []
             for idx, data in enumerate(dataset):
                 inputs, masks, neg_masks = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device)
                 nr_batches, nr_slices, width, height = inputs.shape
-                neg_masks[neg_masks>0.5] = 1
-                neg_masks[neg_masks<1] = 0
+                neg_masks[neg_masks > 0.5] = 1
+                neg_masks[neg_masks < 1] = 0
                 results = self.model.detect_anomaly(inputs)
                 reconstructions = results['reconstruction']
                 anomaly_maps = results['anomaly_map']
-                anomaly_scores = results['anomaly_score']
 
                 for i in range(nr_batches):
                     count = str(idx * nr_batches + i)
@@ -88,54 +83,49 @@ class Evaluator:
                     ano_map_i = anomaly_maps[i][0].detach().numpy()
                     mask_i = masks[i][0].cpu().detach().numpy()
                     neg_mask_i = neg_masks[i][0].cpu().detach().numpy()
-                    bboxes = cv2.cvtColor(neg_mask_i *255, cv2.COLOR_GRAY2RGB)
-                    # thresh_gt = cv2.threshold((mask_*255).astype(np.uint8), 127, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-                    cnts_gt = cv2.findContours((mask_i *255).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    bboxes = cv2.cvtColor(neg_mask_i * 255, cv2.COLOR_GRAY2RGB)
+                    cnts_gt = cv2.findContours((mask_i * 255).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     cnts_gt = cnts_gt[0] if len(cnts_gt) == 2 else cnts_gt[1]
                     gt_box = []
+
                     for c_gt in cnts_gt:
                         x, y, w, h = cv2.boundingRect(c_gt)
-                        gt_box.append([x, y, x+w, y+h])
+                        gt_box.append([x, y, x + w, y + h])
                         cv2.rectangle(bboxes, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                    #
+
                     if x_rec_i is not None:
                         loss_l1 = self.criterion_rec(x_rec_i, x_i)
                         test_metrics['L1'].append(loss_l1.item())
                         loss_lpips = np.squeeze(lpips_alex(x_i.cpu(), x_rec_i.cpu()).detach().numpy())
                         test_metrics['LPIPS'].append(loss_lpips)
-                        #
                         x_rec_i = x_rec_i.cpu().detach().numpy()
-
                         ssim_ = ssim(x_rec_i, x_i.cpu().detach().numpy(), data_range=1.)
                         test_metrics['SSIM'].append(ssim_)
+
                     x_i = x_i.cpu().detach().numpy()
-                    # print(np.sum(mask_))
                     x_pos = ano_map_i * mask_i
                     x_neg = ano_map_i * neg_mask_i
                     res_anomaly = np.sum(x_pos)
                     res_healthy = np.sum(x_neg)
-                    # print(np.sum(x_neg), np.sum(x_pos))
 
                     amount_anomaly = np.count_nonzero(x_pos)
                     amount_mask = np.count_nonzero(mask_i)
 
-                    tp = 1 if amount_anomaly > 0.1 * amount_mask else 0 ## 10% overlap due to large bboxes e.g. for enlarged ventricles
+                    tp = 1 if amount_anomaly > 0.1 * amount_mask else 0  # 10% overlap due to large bboxes e.g. for enlarged ventricles
                     tps += tp
                     fn = 1 if tp == 0 else 0
                     fns += fn
 
                     fp = int(res_healthy / max(res_anomaly, 1))
                     fps.append(fp)
-                    precision = tp / max((tp+fp), 1)
+                    precision = tp / max((tp + fp), 1)
                     test_metrics['TP'].append(tp)
                     test_metrics['FP'].append(fp)
                     test_metrics['Precision'].append(precision)
                     test_metrics['Recall'].append(tp)
                     test_metrics['F1'].append(2 * (precision * tp) / (precision + tp + 1e-8))
 
-                    ious = [res_anomaly, res_healthy]
-
-                    if int(count)==0:
+                    if int(count) == 0:
                         if x_rec_i is None:
                             x_rec_i = np.zeros(x_i.shape)
                         elements = [x_i, x_rec_i, ano_map_i, bboxes.astype(np.int64), x_pos, x_neg]
@@ -156,7 +146,7 @@ class Evaluator:
 
             for metric in test_metrics:
                 print('{} mean: {} +/- {}'.format(metric, np.nanmean(test_metrics[metric]),
-                                                         np.nanstd(test_metrics[metric])))
+                                                  np.nanstd(test_metrics[metric])))
                 if metric == 'TP':
                     print(f'TP: {np.sum(test_metrics[metric])} of {len(test_metrics[metric])} detected')
                 if metric == 'FP':

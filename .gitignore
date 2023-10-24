@@ -1,6 +1,7 @@
 /data/**/*.png
 /data/**/*.csv
 /data/*.zip
+/data.zip
 **__pycache__
 lightning_logs/
 /**/.DS_Store
