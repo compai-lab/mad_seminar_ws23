@@ -187,13 +187,19 @@ class Decoder(nn.Module):
 
 
 class RA(pl.LightningModule):
-    def __init__(self, cdim=1, zdim=128, channels=(64, 128, 256, 512, 512), image_size=128, conditional=False,
-                 cond_dim=10, input_size=128):
+    def __init__(self, config):
         super(RA, self).__init__()
+        cdim=1, zdim=128, channels=(64, 128, 256, 512, 512), image_size=128, conditional=False,
+                 cond_dim=10, input_size=128
 
-        self.zdim = zdim
-        self.conditional = conditional
-        self.cond_dim = cond_dim
+        self.cdim = config['cdim']
+        self.zdim = config['zdim']
+        self.channels = confg['channels']
+        self.image_size = config['image_size]
+        self.conditional = config['conditional']
+        self.cond_dim = config['cond_dim']
+        self.condfig = config 
+        
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
         self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(self.device)
@@ -208,7 +214,6 @@ class RA(pl.LightningModule):
         self.beta_kl = 1.0
         self.beta_rec = 0.5
         self.beta_neg = 128.0
-        self.z_dim = 128
 
         self.embedding_loss = EmbeddingLoss()
         self.loss_fn = nn.MSELoss()
