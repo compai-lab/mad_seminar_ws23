@@ -199,12 +199,13 @@ class RA(pl.LightningModule):
         self.cond_dim = 10
         self.condfig = config 
         self.input_size = self.image_size
-        
-        self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(self.device)
+
+        device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
+        self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(device)
 
         self.encoder = Encoder(self.cdim, self.zdim, self.channels, self.image_size, conditional=self.conditional, cond_dim=self.cond_dim)
 
-        self.decoder = Decoder(self.cdim, self.zdim, self.channels, self.image_size, self.conditional=conditional,
+        self.decoder = Decoder(self.cdim, self.zdim, self.channels, self.image_size, conditional=self.conditional,
                                conv_input_size=self.encoder.conv_output_size, cond_dim=self.cond_dim)
         
         self.scale = 1 / (self.input_size ** 2)  # normalize by images size (channels * height * width)
