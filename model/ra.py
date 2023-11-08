@@ -8,6 +8,7 @@ Code in part from: https://github.com/taldatech/soft-intro-vae-pytorch/blob/main
 # imports
 # torch and friends
 import torch
+import torch.optim as optim
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
@@ -347,8 +348,8 @@ class RA(pl.LightningModule):
     def configure_optimizers(self):
 
         print(self.config)
-        optimizer_e = Adam(model.encoder.parameters(), lr=self.config['lr'])
-        optimizer_d = Adam(model.decoder.parameters(), lr=self.config['lr'])
+        optimizer_e = optim.Adam(model.encoder.parameters(), lr=self.config['lr'])
+        optimizer_d = optim.Adam(model.decoder.parameters(), lr=self.config['lr'])
         return optimizer_e, optimizer_d
 
     def compute_anomaly(self, x, x_rec):
