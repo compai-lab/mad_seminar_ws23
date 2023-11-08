@@ -8,6 +8,7 @@ Code in part from: https://github.com/taldatech/soft-intro-vae-pytorch/blob/main
 # imports
 # torch and friends
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
