@@ -189,8 +189,6 @@ class Decoder(nn.Module):
 class RA(pl.LightningModule):
     def __init__(self, config):
         super(RA, self).__init__()
-        cdim=1, zdim=128, channels=(64, 128, 256, 512, 512), image_size=128, conditional=False,
-                 cond_dim=10, input_size=128
 
         self.cdim = config['cdim']
         self.zdim = config['zdim']
