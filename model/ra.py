@@ -190,14 +190,14 @@ class Decoder(nn.Module):
 class RA(pl.LightningModule):
     def __init__(self, config):
         super(RA, self).__init__()
-
+        
+        self.config = config 
         self.cdim = config['cdim']
         self.zdim = config['zdim']
         self.channels = config['channels']
         self.image_size = config['image_size']
         self.conditional = False
         self.cond_dim = 10
-        self.condfig = config 
         self.input_size = self.image_size
 
         device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
