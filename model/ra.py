@@ -252,7 +252,7 @@ class RA(pl.LightningModule):
         device = x.get_device()
         b, c, w, h = x.shape
 
-        noise_batch = torch.randn(size=(b, self.z_dim)).to(device)
+        noise_batch = torch.randn(size=(b, self.zdim)).to(device)
         real_batch = x.to(device)
 
         # =========== Update E ================
@@ -396,7 +396,7 @@ class RA(pl.LightningModule):
         return y
 
     def sample_with_noise(self, num_samples=1, device=torch.device("cpu"), y_cond=None):
-        z = torch.randn(num_samples, self.z_dim).to(device)
+        z = torch.randn(num_samples, self.zdim).to(device)
         return self.decode(z, y_cond=y_cond)
 
     def encode(self, x, o_cond=None):
