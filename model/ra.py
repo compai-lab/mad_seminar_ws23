@@ -239,7 +239,7 @@ class RA(pl.LightningModule):
 
         return y, {'x_rec': y, 'z_mu': mu, 'z_logvar': logvar,'z': z, 'embeddings': embed_dict['embeddings']}
         
-    def get_anomaly(self, x, o_cond=None, deterministic=False):
+    def detect_anomaly(self, x, o_cond=None, deterministic=False):
         x_rec, x_rec_dict = self.forward(x, o_cond, deterministic)
         anomaly_maps, anomaly_scores = self.compute_anomaly(x, x_rec)
 
