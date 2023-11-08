@@ -217,6 +217,7 @@ class RA(pl.LightningModule):
 
         self.embedding_loss = EmbeddingLoss()
         self.loss_fn = nn.MSELoss()
+        self.automatic_optimization = False
 
 
 
