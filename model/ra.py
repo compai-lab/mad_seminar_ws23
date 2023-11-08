@@ -199,6 +199,8 @@ class RA(pl.LightningModule):
         self.conditional = config['conditional']
         self.cond_dim = config['cond_dim']
         self.condfig = config 
+        conditional = False
+        input_size = image_size
         
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
@@ -211,9 +213,9 @@ class RA(pl.LightningModule):
         
         self.scale = 1 / (input_size ** 2)  # normalize by images size (channels * height * width)
         self.gamma_r = 1e-8
-        self.beta_kl = 1.0
-        self.beta_rec = 0.5
-        self.beta_neg = 128.0
+        self.beta_kl = config['beta_kl']
+        self.beta_rec = config['beta_rec']
+        self.beta_neg = config['beta_neg']
 
         self.embedding_loss = EmbeddingLoss()
         self.loss_fn = nn.MSELoss()
