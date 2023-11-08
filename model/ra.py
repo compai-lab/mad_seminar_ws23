@@ -198,12 +198,12 @@ class RA(nn.Module):
             y = self.decode(z)
 
         return y, {'x_rec': y, 'z_mu': mu, 'z_logvar': logvar,'z': z, 'embeddings': embed_dict['embeddings']}
-
+        
     def get_anomaly(self, x, o_cond=None, deterministic=False):
         x_rec, x_rec_dict = self.forward(x, o_cond, deterministic)
         anomaly_maps, anomaly_scores = self.compute_anomaly(x, x_rec)
 
-        return anomaly_maps, anomaly_scores, x_rec_dict
+        return {'reconstruction': x_rec, 'anomaly_map': anomaly_maps, 'anomaly_score': anomaly_scores}
 
     def compute_anomaly(self, x, x_rec):
         anomaly_maps = []
