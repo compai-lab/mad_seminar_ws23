@@ -202,12 +202,12 @@ class RA(pl.LightningModule):
         
         self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(self.device)
 
-        self.encoder = Encoder(cdim, zdim, channels, image_size, conditional=conditional, cond_dim=cond_dim)
+        self.encoder = Encoder(self.cdim, self.zdim, self.channels, self.image_size, conditional=self.conditional, cond_dim=self.cond_dim)
 
-        self.decoder = Decoder(cdim, zdim, channels, image_size, conditional=conditional,
-                               conv_input_size=self.encoder.conv_output_size, cond_dim=cond_dim)
+        self.decoder = Decoder(self.cdim, self.zdim, self.channels, self.image_size, self.conditional=conditional,
+                               conv_input_size=self.encoder.conv_output_size, cond_dim=self.cond_dim)
         
-        self.scale = 1 / (input_size ** 2)  # normalize by images size (channels * height * width)
+        self.scale = 1 / (self.input_size ** 2)  # normalize by images size (channels * height * width)
         self.gamma_r = 1e-8
         self.beta_kl = config['beta_kl']
         self.beta_rec = config['beta_rec']
