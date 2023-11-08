@@ -195,11 +195,10 @@ class RA(pl.LightningModule):
         self.zdim = config['zdim']
         self.channels = config['channels']
         self.image_size = config['image_size']
-        self.conditional = config['conditional']
-        self.cond_dim = config['cond_dim']
+        self.conditional = False
+        self.cond_dim = 10
         self.condfig = config 
-        conditional = False
-        input_size = image_size
+        self.input_size = image_size
         
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
