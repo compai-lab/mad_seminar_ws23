@@ -13,7 +13,7 @@ used as a starting point for your projects.
 
 Clone this repository
 ```shell
-git clone https://github.com/compai-lab/mad_seminar_s23.git
+git clone https://github.com/compai-lab/mad_seminar_ws23.git
 ```
 
 Create (and activate) a new virtual environment (requires conda)
