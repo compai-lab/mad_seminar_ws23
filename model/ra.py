@@ -255,25 +255,25 @@ class RA(pl.LightningModule):
         real_batch = x.to(device)
 
         # =========== Update E ================
-        for param in self.model.encoder.parameters():
+        for param in self.encoder.parameters():
             param.requires_grad = True
-        for param in self.model.decoder.parameters():
+        for param in self.decoder.parameters():
             param.requires_grad = False
 
-        fake = self.model.sample(noise_batch)
-        real_mu, real_logvar, anomaly_embeddings = self.model.encode(real_batch)
+        fake = self.sample(noise_batch)
+        real_mu, real_logvar, anomaly_embeddings = self.encode(real_batch)
         z = reparameterize(real_mu, real_logvar)
-        rec = self.model.decoder(z)
+        rec = self.decoder(z)
 
-        _, _, healthy_embeddings = self.model.encode(rec.detach())
+        _, _, healthy_embeddings = self.encode(rec.detach())
 
         loss_emb = self.embedding_loss(anomaly_embeddings['embeddings'], healthy_embeddings['embeddings'])
 
         loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
         lossE_real_kl = calc_kl(real_logvar, real_mu, reduce="mean")
-        rec_rec, z_dict = self.model(rec.detach(), deterministic=False)
+        rec_rec, z_dict = self(rec.detach(), deterministic=False)
         rec_mu, rec_logvar, z_rec = z_dict['z_mu'], z_dict['z_logvar'], z_dict['z']
-        rec_fake, z_dict_fake = self.model(fake.detach(), deterministic=False)
+        rec_fake, z_dict_fake = self(fake.detach(), deterministic=False)
         fake_mu, fake_logvar, z_fake = z_dict_fake['z_mu'], z_dict_fake['z_logvar'], z_dict_fake['z']
 
         kl_rec = calc_kl(rec_logvar, rec_mu, reduce="none")
@@ -299,23 +299,23 @@ class RA(pl.LightningModule):
         
 
         # ========= Update D ==================
-        for param in self.model.encoder.parameters():
+        for param in self.encoder.parameters():
             param.requires_grad = False
-        for param in self.model.decoder.parameters():
+        for param in self.decoder.parameters():
             param.requires_grad = True
 
-        fake = self.model.sample(noise_batch)
-        rec = self.model.decoder(z.detach())
+        fake = self.sample(noise_batch)
+        rec = self.decoder(z.detach())
         loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
 
-        rec_mu, rec_logvar,_ = self.model.encode(rec)
+        rec_mu, rec_logvar,_ = self.encode(rec)
         z_rec = reparameterize(rec_mu, rec_logvar)
 
-        fake_mu, fake_logvar,_ = self.model.encode(fake)
+        fake_mu, fake_logvar,_ = self.encode(fake)
         z_fake = reparameterize(fake_mu, fake_logvar)
 
-        rec_rec = self.model.decode(z_rec.detach())
-        rec_fake = self.model.decode(z_fake.detach())
+        rec_rec = self.decode(z_rec.detach())
+        rec_fake = self.decode(z_fake.detach())
 
         loss_rec_rec = calc_reconstruction_loss(rec.detach(), rec_rec, loss_type="mse", reduction="mean")
         loss_fake_rec = calc_reconstruction_loss(fake.detach(), rec_fake, loss_type="mse", reduction="mean")
@@ -348,8 +348,8 @@ class RA(pl.LightningModule):
     def configure_optimizers(self):
 
         print(self.config)
-        optimizer_e = optim.Adam(model.encoder.parameters(), lr=self.config['lr'])
-        optimizer_d = optim.Adam(model.decoder.parameters(), lr=self.config['lr'])
+        optimizer_e = optim.Adam(self.encoder.parameters(), lr=self.config['lr'])
+        optimizer_d = optim.Adam(self.decoder.parameters(), lr=self.config['lr'])
         return optimizer_e, optimizer_d
 
     def compute_anomaly(self, x, x_rec):
