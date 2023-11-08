@@ -24,7 +24,7 @@ conda activate mad
 
 Install the required packages
 ```shell
-cd mad_seminar_s23
+cd mad_seminar_ws23
 python -m pip install -r requirements.txt
 ```
 
