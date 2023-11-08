@@ -193,7 +193,7 @@ class RA(pl.LightningModule):
 
         self.cdim = config['cdim']
         self.zdim = config['zdim']
-        self.channels = confg['channels']
+        self.channels = config['channels']
         self.image_size = config['image_size']
         self.conditional = config['conditional']
         self.cond_dim = config['cond_dim']
