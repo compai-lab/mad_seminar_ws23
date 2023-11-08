@@ -10,7 +10,7 @@ Code in part from: https://github.com/taldatech/soft-intro-vae-pytorch/blob/main
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import pytorch_lightning as pl
 # standard
 import matplotlib
 matplotlib.use('Agg')
@@ -19,11 +19,33 @@ from skimage import exposure
 from scipy.ndimage.filters import gaussian_filter
 import lpips
 
+
 """
 Models
 """
 
+class EmbeddingLoss(torch.nn.Module):
+    def __init__(self):
+        super(EmbeddingLoss, self).__init__()
+        self.criterion = torch.nn.MSELoss()
+        self.similarity_loss = torch.nn.CosineSimilarity()
 
+    def forward(self, teacher_embeddings, student_embeddings):
+        # print(f'LEN {len(output_real)}')
+        layer_id = 0
+        # teacher_embeddings = teacher_embeddings[:-1]
+        # student_embeddings = student_embeddings[3:-1]
+        # print(f' Teacher: {len(teacher_embeddings)}, Student: {len(student_embeddings)}')
+        for teacher_feature, student_feature in zip(teacher_embeddings, student_embeddings):
+            if layer_id == 0:
+                total_loss = 0.5 * self.criterion(teacher_feature, student_feature)
+            else:
+                total_loss += 0.5 * self.criterion(teacher_feature, student_feature)
+            total_loss += torch.mean(1 - self.similarity_loss(teacher_feature.view(teacher_feature.shape[0], -1),
+                                                         student_feature.view(student_feature.shape[0], -1)))
+            layer_id += 1
+        return total_loss
+        
 class ResidualBlock(nn.Module):
     """
     https://github.com/hhb072/IntroVAE
@@ -164,9 +186,9 @@ class Decoder(nn.Module):
         return y
 
 
-class RA(nn.Module):
+class RA(pl.LightningModule):
     def __init__(self, cdim=1, zdim=128, channels=(64, 128, 256, 512, 512), image_size=128, conditional=False,
-                 cond_dim=10):
+                 cond_dim=10, input_size=128):
         super(RA, self).__init__()
 
         self.zdim = zdim
@@ -180,6 +202,18 @@ class RA(nn.Module):
 
         self.decoder = Decoder(cdim, zdim, channels, image_size, conditional=conditional,
                                conv_input_size=self.encoder.conv_output_size, cond_dim=cond_dim)
+        
+        self.scale = 1 / (input_size ** 2)  # normalize by images size (channels * height * width)
+        self.gamma_r = 1e-8
+        self.beta_kl = 1.0
+        self.beta_rec = 0.5
+        self.beta_neg = 128.0
+        self.z_dim = 128
+
+        self.embedding_loss = EmbeddingLoss()
+        self.loss_fn = nn.MSELoss()
+
+
 
     def forward(self, x, o_cond=None, deterministic=False):
         if self.conditional and o_cond is not None:
@@ -204,6 +238,114 @@ class RA(nn.Module):
         anomaly_maps, anomaly_scores = self.compute_anomaly(x, x_rec)
 
         return {'reconstruction': x_rec, 'anomaly_map': anomaly_maps, 'anomaly_score': anomaly_scores}
+
+
+    def training_step(self, batch: Tensor, batch_idx):
+        x = batch
+        optimizer_e, optimizer_d = self.optimizers()
+        device = x.get_device()
+        b, c, w, h = x.shape
+
+        noise_batch = torch.randn(size=(b, self.z_dim)).to(device)
+        real_batch = x.to(device)
+
+        # =========== Update E ================
+        for param in self.model.encoder.parameters():
+            param.requires_grad = True
+        for param in self.model.decoder.parameters():
+            param.requires_grad = False
+
+        fake = self.model.sample(noise_batch)
+        real_mu, real_logvar, anomaly_embeddings = self.model.encode(real_batch)
+        z = reparameterize(real_mu, real_logvar)
+        rec = self.model.decoder(z)
+
+        _, _, healthy_embeddings = self.model.encode(rec.detach())
+
+        loss_emb = self.embedding_loss(anomaly_embeddings['embeddings'], healthy_embeddings['embeddings'])
+
+        loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
+        lossE_real_kl = calc_kl(real_logvar, real_mu, reduce="mean")
+        rec_rec, z_dict = self.model(rec.detach(), deterministic=False)
+        rec_mu, rec_logvar, z_rec = z_dict['z_mu'], z_dict['z_logvar'], z_dict['z']
+        rec_fake, z_dict_fake = self.model(fake.detach(), deterministic=False)
+        fake_mu, fake_logvar, z_fake = z_dict_fake['z_mu'], z_dict_fake['z_logvar'], z_dict_fake['z']
+
+        kl_rec = calc_kl(rec_logvar, rec_mu, reduce="none")
+        kl_fake = calc_kl(fake_logvar, fake_mu, reduce="none")
+
+        loss_rec_rec_e = calc_reconstruction_loss(rec, rec_rec, loss_type="mse", reduction='none')
+        while len(loss_rec_rec_e.shape) > 1:
+            loss_rec_rec_e = loss_rec_rec_e.sum(-1)
+        loss_rec_fake_e = calc_reconstruction_loss(fake, rec_fake, loss_type="mse", reduction='none')
+        while len(loss_rec_fake_e.shape) > 1:
+            loss_rec_fake_e = loss_rec_fake_e.sum(-1)
+
+        expelbo_rec = (-2 * self.scale * (self.beta_rec * loss_rec_rec_e + self.beta_neg * kl_rec)).exp().mean()
+        expelbo_fake = (-2 * self.scale * (self.beta_rec * loss_rec_fake_e + self.beta_neg * kl_fake)).exp().mean()
+
+        lossE_fake = 0.25 * (expelbo_rec + expelbo_fake)
+        lossE_real = self.scale * (self.beta_rec * loss_rec + self.beta_kl * lossE_real_kl)
+
+        lossE = lossE_real + lossE_fake + 0.005 * loss_emb
+        optimizer_e.zero_grad()
+        self.manual_backward(lossE)
+        optimizer_e.step()
+        
+
+        # ========= Update D ==================
+        for param in self.model.encoder.parameters():
+            param.requires_grad = False
+        for param in self.model.decoder.parameters():
+            param.requires_grad = True
+
+        fake = self.model.sample(noise_batch)
+        rec = self.model.decoder(z.detach())
+        loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
+
+        rec_mu, rec_logvar,_ = self.model.encode(rec)
+        z_rec = reparameterize(rec_mu, rec_logvar)
+
+        fake_mu, fake_logvar,_ = self.model.encode(fake)
+        z_fake = reparameterize(fake_mu, fake_logvar)
+
+        rec_rec = self.model.decode(z_rec.detach())
+        rec_fake = self.model.decode(z_fake.detach())
+
+        loss_rec_rec = calc_reconstruction_loss(rec.detach(), rec_rec, loss_type="mse", reduction="mean")
+        loss_fake_rec = calc_reconstruction_loss(fake.detach(), rec_fake, loss_type="mse", reduction="mean")
+
+        lossD_rec_kl = calc_kl(rec_logvar, rec_mu, reduce="mean")
+        lossD_fake_kl = calc_kl(fake_logvar, fake_mu, reduce="mean")
+
+
+        lossD = self.scale * (loss_rec * self.beta_rec + (
+                lossD_rec_kl + lossD_fake_kl) * 0.5 * self.beta_kl + self.gamma_r * 0.5 * self.beta_rec * (
+                                 loss_rec_rec + loss_fake_rec))
+
+        optimizer_d.zero_grad()
+        self.manual_backward(lossD)
+        optimizer_d.step()
+
+        recon,_ = self(x)
+        loss = self.loss_fn(recon, x)
+        self.log_dict({"e_loss": lossE, "d_loss": lossD, 'emb_loss': loss_emb}, prog_bar=True, on_epoch=True, on_step=False)
+        self.log('train_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
+        return loss 
+        
+    def validation_step(self, batch: Tensor, batch_idx):
+        x = batch
+        recon,_ = self(x)
+        loss = self.loss_fn(recon, x)
+        self.log('val_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
+        return loss
+
+    def configure_optimizers(self):
+
+        print(self.config)
+        optimizer_e = Adam(model.encoder.parameters(), lr=self.config['lr'])
+        optimizer_d = Adam(model.decoder.parameters(), lr=self.config['lr'])
+        return optimizer_e, optimizer_d
 
     def compute_anomaly(self, x, x_rec):
         anomaly_maps = []
