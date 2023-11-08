@@ -200,8 +200,6 @@ class RA(pl.LightningModule):
         self.condfig = config 
         self.input_size = self.image_size
         
-        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
-
         self.l_pips_sq = lpips.LPIPS(pretrained=True, net='squeeze', use_dropout=True, eval_mode=True, spatial=True, lpips=True).to(self.device)
 
         self.encoder = Encoder(cdim, zdim, channels, image_size, conditional=conditional, cond_dim=cond_dim)
