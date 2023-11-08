@@ -198,7 +198,7 @@ class RA(pl.LightningModule):
         self.conditional = False
         self.cond_dim = 10
         self.condfig = config 
-        self.input_size = image_size
+        self.input_size = self.image_size
         
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
